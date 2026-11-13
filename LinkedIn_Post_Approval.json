@@ -1,0 +1,248 @@
+{
+  "name": "LinkedIn Post Approval",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "LinkedIn Post Generator",
+        "formDescription": "Enter a topic. AI will draft and review a LinkedIn post, then email it to you for approval.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Topic",
+              "fieldName": "Topic",
+              "placeholder": "e.g. Remote work",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Generate Post"
+        }
+      },
+      "id": "19b9640b-7c52-431c-8bac-54073ce7f8ad",
+      "name": "Topic Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [240, 304],
+      "webhookId": "02aa7659-990d-4460-b08a-b6b76188b488"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a LinkedIn post about: {{ $json.Topic }}\nHook in line one, 120-150 words, one call to action, max 3 hashtags. Return the post only.",
+        "options": {
+          "systemMessage": "You are a LinkedIn ghostwriter. Write in a clear, human, conversational voice with short lines. No emojis overload, no buzzword filler. Return only the post text, nothing else."
+        }
+      },
+      "id": "2a926a47-d874-4d6c-8a65-d9a2e0f0c31c",
+      "name": "Writer Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [544, 304]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "accounts/fireworks/models/gpt-oss-120b"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "temperature": 0.8
+        }
+      },
+      "id": "63fd5652-1bbc-4395-b104-31d4925dba64",
+      "name": "Writer Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [544, 528],
+      "credentials": {
+        "openAiApi": {
+          "id": "7Es0r8wd2BlDp2nw",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Score the post below out of 10 on hook, clarity and CTA, then rewrite its weakest part. Return the final post only.\n\n{{ $json.output }}",
+        "options": {
+          "systemMessage": "You are a strict LinkedIn editor. Standards: (1) Hook: line one must stop the scroll with a specific claim, number or tension, not a generic opener. (2) Clarity: one idea, short sentences, no jargon or filler. (3) CTA: exactly one clear call to action at the end. (4) Length 120-150 words, maximum 3 hashtags. Silently score the post out of 10 on hook, clarity and CTA, rewrite only the weakest part, keep the rest. Output ONLY the final post text. Never include scores, feedback, labels or explanations."
+        }
+      },
+      "id": "6d9bf456-7867-4b05-858d-0d93b7dfb5d1",
+      "name": "Reviewer Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [848, 304]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "accounts/fireworks/models/gpt-oss-120b"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "27574457-a87b-4e89-979e-84e4c0c007dc",
+      "name": "Reviewer Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [848, 528],
+      "credentials": {
+        "openAiApi": {
+          "id": "7Es0r8wd2BlDp2nw",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "your-email@example.com",
+        "subject": "=Approve LinkedIn post: {{ $(\"Topic Form\").item.json.Topic }}",
+        "message": "=Topic: {{ $(\"Topic Form\").item.json.Topic }}\n\n{{ $json.output }}\n\nApprove to save this post to your sheet, or Reject to discard it.",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "disapproveLabel": "Reject"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "3f423d95-424f-49d0-a4e7-e1770b7cd8de",
+      "name": "Email Post for Approval",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1136, 304],
+      "webhookId": "a9709d94-4550-48fa-9af1-444c55576b29",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WtcjMzmfd0swWvRA",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b8366be7-5fe3-4fd7-bd3d-8f8253ca83ae",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [1440, 304]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "LinkedIn Posts"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gid=0",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.toFormat(\"yyyy-MM-dd\") }}",
+            "Topic": "={{ $('Topic Form').item.json.Topic }}",
+            "Final Post": "={{ $('Reviewer Agent').item.json.output }}",
+            "Status": "Approved"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Date", "displayName": "Date", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Topic", "displayName": "Topic", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Final Post", "displayName": "Final Post", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "73aa19ca-5171-4741-83b2-f7d576327bb5",
+      "name": "Save Approved Post",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1744, 208],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yWlrtC2Lc4RdHNEF",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Topic Form": {
+      "main": [[{ "node": "Writer Agent", "type": "main", "index": 0 }]]
+    },
+    "Writer Agent": {
+      "main": [[{ "node": "Reviewer Agent", "type": "main", "index": 0 }]]
+    },
+    "Writer Chat Model": {
+      "ai_languageModel": [[{ "node": "Writer Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Reviewer Agent": {
+      "main": [[{ "node": "Email Post for Approval", "type": "main", "index": 0 }]]
+    },
+    "Reviewer Chat Model": {
+      "ai_languageModel": [[{ "node": "Reviewer Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Email Post for Approval": {
+      "main": [[{ "node": "Approved?", "type": "main", "index": 0 }]]
+    },
+    "Approved?": {
+      "main": [[{ "node": "Save Approved Post", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
